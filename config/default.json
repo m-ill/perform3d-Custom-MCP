@@ -1,0 +1,22 @@
+{
+  "perform3d": {
+    "visible": false
+  },
+  "unitsDefault": {
+    "force": "kN",
+    "length": "cm"
+  },
+  "paths": {
+    "templates": "C:/p3d-mcp/templates",
+    "work": "C:/p3d-mcp/work"
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8732,
+    "cors": ["http://localhost:3000"]
+  },
+  "limits": {
+    "analysisTimeoutSec": 7200,
+    "commandTimeoutSec": 30
+  }
+}
