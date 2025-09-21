@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
@@ -6,7 +6,10 @@ const moduleDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(moduleDir, '..');
 const configSchema = z.object({
     perform3d: z.object({
+        installPath: z.string(),
         visible: z.boolean().default(false),
+        maxInstances: z.number().default(1),
+        startupTimeout: z.number().default(30000),
     }),
     unitsDefault: z.object({
         force: z.string(),
@@ -15,20 +18,35 @@ const configSchema = z.object({
     paths: z.object({
         templates: z.string(),
         work: z.string(),
+        exports: z.string().optional(),
+        logs: z.string().optional(),
     }),
     server: z.object({
         host: z.string(),
         port: z.number(),
         cors: z.array(z.string()).default([]),
+        maxRequestSize: z.string().default('5mb'),
     }),
     limits: z.object({
         analysisTimeoutSec: z.number().positive(),
         commandTimeoutSec: z.number().positive(),
+        maxNodes: z.number().positive().optional(),
+        maxElements: z.number().positive().optional(),
+        maxLoadCases: z.number().positive().optional(),
     }),
     worker: z.object({
-        command: z.string().default(''),
+        executable: z.string().optional(),
+        command: z.string().optional(),
         args: z.array(z.string()).default([]),
+        restartOnError: z.boolean().default(true),
+        maxRestarts: z.number().default(3),
+        healthCheckInterval: z.number().default(60000),
     }).partial().default({}),
+    logging: z.object({
+        level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+        maxFiles: z.number().default(10),
+        maxSizeMB: z.number().default(50),
+    }).optional(),
 });
 function loadFile(relativePath) {
     try {
@@ -59,6 +77,40 @@ function mergeConfig(base, override) {
     }
     return override ?? base;
 }
+function validateAndPreparePaths(config) {
+    // Validate Perform3D installation
+    const installPath = config.perform3d.installPath;
+    if (!existsSync(installPath)) {
+        console.warn(`Warning: Perform3D installation path does not exist: ${installPath}`);
+        console.warn('Please ensure Perform3D v10 is installed or update the config.');
+    }
+    // Create required directories if they don't exist
+    const requiredPaths = [
+        config.paths.templates,
+        config.paths.work,
+        config.paths.exports,
+        config.paths.logs,
+    ];
+    for (const path of requiredPaths) {
+        if (path && !existsSync(path)) {
+            try {
+                mkdirSync(path, { recursive: true });
+                console.log(`Created directory: ${path}`);
+            }
+            catch (error) {
+                console.error(`Failed to create directory ${path}:`, error);
+            }
+        }
+    }
+    // Validate worker executable
+    if (config.worker.executable) {
+        const workerPath = resolve(projectRoot, config.worker.executable);
+        if (!existsSync(workerPath)) {
+            console.warn(`Warning: Worker executable not found: ${workerPath}`);
+            console.warn('Please build the C# worker project first.');
+        }
+    }
+}
 export function loadConfig() {
     const defaultConfig = loadFile('default.json');
     const localConfig = loadFile('local.json');
@@ -67,12 +119,27 @@ export function loadConfig() {
     const envConfig = envOverride ? JSON.parse(envOverride) : {};
     const finalConfig = mergeConfig(merged, envConfig);
     const parsed = configSchema.parse(finalConfig);
-    if (!parsed.worker?.command) {
+    // Set default worker path if not specified
+    if (!parsed.worker?.command && !parsed.worker?.executable) {
         const defaultWorkerPath = resolve(projectRoot, 'worker', 'Perform3D.Worker.exe');
         parsed.worker = {
+            ...parsed.worker,
             command: defaultWorkerPath,
+            executable: './worker/Perform3D.Worker.exe',
             args: [],
         };
     }
+    else if (parsed.worker?.executable && !parsed.worker?.command) {
+        parsed.worker.command = resolve(projectRoot, parsed.worker.executable);
+    }
+    // Set default paths if not specified
+    if (!parsed.paths.exports) {
+        parsed.paths.exports = resolve(parsed.paths.work, 'exports');
+    }
+    if (!parsed.paths.logs) {
+        parsed.paths.logs = resolve(parsed.paths.work, 'logs');
+    }
+    // Validate and prepare filesystem
+    validateAndPreparePaths(parsed);
     return parsed;
 }

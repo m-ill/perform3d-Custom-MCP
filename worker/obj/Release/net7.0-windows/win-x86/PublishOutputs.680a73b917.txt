@@ -1,0 +1,13 @@
+D:\MCP\perform3d\worker\Perform3D.Worker.exe
+D:\MCP\perform3d\worker\Perform3D.Worker.dll
+D:\MCP\perform3d\worker\Perform3D.Worker.deps.json
+D:\MCP\perform3d\worker\Perform3D.Worker.runtimeconfig.json
+D:\MCP\perform3d\worker\Perform3D.Worker.pdb
+D:\MCP\perform3d\worker\Microsoft.Extensions.Configuration.dll
+D:\MCP\perform3d\worker\Microsoft.Extensions.Configuration.Abstractions.dll
+D:\MCP\perform3d\worker\Microsoft.Extensions.Configuration.FileExtensions.dll
+D:\MCP\perform3d\worker\Microsoft.Extensions.Configuration.Json.dll
+D:\MCP\perform3d\worker\Microsoft.Extensions.FileProviders.Abstractions.dll
+D:\MCP\perform3d\worker\Microsoft.Extensions.FileProviders.Physical.dll
+D:\MCP\perform3d\worker\Microsoft.Extensions.FileSystemGlobbing.dll
+D:\MCP\perform3d\worker\Microsoft.Extensions.Primitives.dll

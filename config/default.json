@@ -1,6 +1,9 @@
 {
   "perform3d": {
-    "visible": false
+    "installPath": "C:/Program Files/Computers and Structures/Perform-3D 10",
+    "visible": false,
+    "maxInstances": 1,
+    "startupTimeout": 30000
   },
   "unitsDefault": {
     "force": "kN",
@@ -8,15 +11,32 @@
   },
   "paths": {
     "templates": "C:/p3d-mcp/templates",
-    "work": "C:/p3d-mcp/work"
+    "work": "C:/p3d-mcp/work",
+    "exports": "C:/p3d-mcp/exports",
+    "logs": "C:/p3d-mcp/logs"
+  },
+  "worker": {
+    "executable": "./worker/Perform3D.Worker.exe",
+    "restartOnError": true,
+    "maxRestarts": 3,
+    "healthCheckInterval": 60000
   },
   "server": {
     "host": "127.0.0.1",
     "port": 8732,
-    "cors": ["http://localhost:3000"]
+    "cors": ["http://localhost:3000"],
+    "maxRequestSize": "5mb"
   },
   "limits": {
     "analysisTimeoutSec": 7200,
-    "commandTimeoutSec": 30
+    "commandTimeoutSec": 30,
+    "maxNodes": 100000,
+    "maxElements": 200000,
+    "maxLoadCases": 100
+  },
+  "logging": {
+    "level": "info",
+    "maxFiles": 10,
+    "maxSizeMB": 50
   }
 }

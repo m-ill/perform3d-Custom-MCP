@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, } from '@modelcontextprotocol/sdk/types.js';
+import { CommandSchemas } from '../schemas.js';
+import { z } from 'zod';
 const TOOL_MAP = {
     connect: 'connect',
     openModel: 'open',
@@ -84,24 +86,54 @@ export function registerStreamableMcp(app, bridge, _progressHub, config) {
                 };
             }
             if (commandKey === 'connect') {
-                const result = await bridge.request('connect', { visible: config.perform3d.visible });
-                return asJsonContent(result);
+                try {
+                    const schema = CommandSchemas.connect;
+                    const validatedArgs = schema ? schema.parse({}) : {};
+                    const result = await bridge.request('connect', validatedArgs);
+                    return asJsonContent(result);
+                }
+                catch (error) {
+                    if (error instanceof z.ZodError) {
+                        return asJsonContent({ ok: false, error: 'VALIDATION_ERROR', details: error.errors });
+                    }
+                    throw error;
+                }
             }
             if (commandKey === 'run_series') {
-                const meta = toolArgs._meta;
-                const maybeToken = meta?.progressToken;
-                const progressToken = typeof maybeToken === 'string'
-                    ? maybeToken
-                    : maybeToken !== undefined
-                        ? String(maybeToken)
-                        : randomUUID();
-                const payload = { ...toolArgs, progressToken };
-                delete payload._meta;
-                const result = await bridge.request(commandKey, payload, config.limits.analysisTimeoutSec);
-                return asJsonContent({ ok: true, progressToken, result });
+                try {
+                    const meta = toolArgs._meta;
+                    const maybeToken = meta?.progressToken;
+                    const progressToken = typeof maybeToken === 'string'
+                        ? maybeToken
+                        : maybeToken !== undefined
+                            ? String(maybeToken)
+                            : randomUUID();
+                    const payload = { ...toolArgs, progressToken };
+                    delete payload._meta;
+                    const schema = CommandSchemas[commandKey];
+                    const validatedPayload = schema ? schema.parse(payload) : payload;
+                    const result = await bridge.request(commandKey, validatedPayload, config.limits.analysisTimeoutSec);
+                    return asJsonContent({ ok: true, progressToken, result });
+                }
+                catch (error) {
+                    if (error instanceof z.ZodError) {
+                        return asJsonContent({ ok: false, error: 'VALIDATION_ERROR', details: error.errors });
+                    }
+                    throw error;
+                }
             }
-            const result = await bridge.request(commandKey, toolArgs);
-            return asJsonContent(result ?? { ok: true });
+            try {
+                const schema = CommandSchemas[commandKey];
+                const validatedArgs = schema ? schema.parse(toolArgs) : toolArgs;
+                const result = await bridge.request(commandKey, validatedArgs);
+                return asJsonContent(result ?? { ok: true });
+            }
+            catch (error) {
+                if (error instanceof z.ZodError) {
+                    return asJsonContent({ ok: false, error: 'VALIDATION_ERROR', details: error.errors });
+                }
+                throw error;
+            }
         });
         return server;
     }

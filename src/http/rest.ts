@@ -5,6 +5,8 @@ import { AppConfig } from '../config.js';
 import { logger, getRecentLogs } from '../logging.js';
 import { ProgressHub } from '../progress.js';
 import { randomUUID } from 'node:crypto';
+import { CommandSchemas, RunSeriesArgsSchema } from '../schemas.js';
+import { z } from 'zod';
 
 function mapError(error: unknown) {
   const err = error as Error & { code?: string };
@@ -39,10 +41,15 @@ export function createRestApp(
   app.post('/api/project/connect', async (_req, res, next) => {
     try {
       await bridge.start();
-      const version = await bridge.request<{ version: string }>('connect', { visible: config.perform3d.visible });
+      const args = CommandSchemas.connect?.parse({}) ?? {};
+      const version = await bridge.request<{ version: string }>('connect', args);
       res.json({ ok: true, sessionId: randomUUID(), version: version?.version ?? 'unknown' });
     } catch (error) {
-      next(error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ ok: false, error: { code: 'VALIDATION_ERROR', details: error.errors } });
+      } else {
+        next(error);
+      }
     }
   });
 
@@ -65,12 +72,17 @@ export function createRestApp(
 
   app.post('/api/analysis/define-series', createCommandHandler(bridge, 'define_series'));
   app.post('/api/analysis/run-series', async (req, res, next) => {
-    const progressToken = (req.body?._meta?.progressToken as string) || randomUUID();
     try {
-      const result = await bridge.request('run_series', { ...req.body, progressToken }, config.limits.analysisTimeoutSec);
+      const progressToken = randomUUID();
+      const args = RunSeriesArgsSchema.parse({ ...req.body, progressToken });
+      const result = await bridge.request('run_series', args, config.limits.analysisTimeoutSec);
       res.json({ ok: true, result, progressToken });
     } catch (error) {
-      next(error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ ok: false, error: { code: 'VALIDATION_ERROR', details: error.errors } });
+      } else {
+        next(error);
+      }
     }
   });
 
@@ -149,10 +161,16 @@ function toWorkerKey(kind: string) {
 function createCommandHandler(bridge: WorkerBridge, command: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const data = await bridge.request(command, req.body ?? {});
+      const schema = CommandSchemas[command];
+      const args = schema ? schema.parse(req.body ?? {}) : req.body ?? {};
+      const data = await bridge.request(command, args);
       res.json({ ok: true, data });
     } catch (error) {
-      next(error);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ ok: false, error: { code: 'VALIDATION_ERROR', details: error.errors } });
+      } else {
+        next(error);
+      }
     }
   };
 }
